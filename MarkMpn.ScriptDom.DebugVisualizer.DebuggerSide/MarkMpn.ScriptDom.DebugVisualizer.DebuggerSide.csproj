@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <PackageReference Include="ColorCode.HTML" Version="2.0.15" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.12.1" />
     <PackageReference Include="Microsoft.VisualStudio.DebuggerVisualizers" Version="17.6.1032901" />
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Sdk" Version="17.9.2092" />
     <PackageReference Include="Microsoft.VisualStudio.Extensibility.Build" Version="17.9.2092" />

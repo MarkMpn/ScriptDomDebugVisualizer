@@ -1,12 +1,10 @@
 ﻿using ColorCode;
-using ColorCode.Compilation.Languages;
 using ColorCode.Styling;
+using HtmlAgilityPack;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Microsoft.VisualStudio.Extensibility.DebuggerVisualizers;
-using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 using System.Drawing;
 using System.Windows;
@@ -22,8 +20,6 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
         private string? _filePath;
         private readonly VisualizerTarget _visualizerTarget;
         private readonly Color _backgroundColor = Color.Black;// VSColorTheme.GetThemedColor(ThemedDialogColors.WindowPanelBrushKey);
-        private TSqlFragment _currentHighlight;
-        private string _currentHighlightKey;
         private readonly SemaphoreSlim _highlightLock = new SemaphoreSlim(1, 1);
         private static readonly string AssemblyLocation = Path.GetDirectoryName(typeof(ScriptDomUserControl).Assembly.Location);
 
@@ -72,8 +68,13 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                     fragment = ((TSqlScript)parser.Parse(reader, out _)).Batches.Single().Statements.Single();
                 }
 
+                // Generate the HTML for the script
                 var formatter = new HtmlFormatter(IsBackgroundDarkColor(_backgroundColor) ? StyleDictionary.DefaultDark : StyleDictionary.DefaultLight);
                 var html = formatter.GetHtmlString(sql, Languages.Sql);
+
+                // Tag each token within the formatted HTML
+                html = TagTokens(html, fragment);
+
                 _filePath = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetRandomFileName(), "html"));
 
                 using var templateStream = GetType().Assembly.GetManifestResourceStream("MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide.template.html");
@@ -101,6 +102,79 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                     webView.CoreWebView2.Navigate(_filePath);
                 }
             }
+        }
+
+        private string TagTokens(string html, TSqlFragment fragment)
+        {
+            if (fragment.ScriptTokenStream == null)
+                return html;
+
+            var parsed = new HtmlDocument();
+            parsed.LoadHtml(html);
+
+            var node = FindNextTextNode(parsed.DocumentNode);
+
+            for (var tokenIndex = 0; tokenIndex < fragment.ScriptTokenStream.Count; tokenIndex++)
+            {
+                var token = fragment.ScriptTokenStream[tokenIndex];
+
+                if (token.TokenType == TSqlTokenType.EndOfFile)
+                    break;
+
+                node = FindNextTextNode(node);
+
+                if (node.Text.Length > token.Text.Length)
+                {
+                    // Split this node into two parts
+                    var suffixNode = parsed.CreateTextNode(node.Text.Substring(token.Text.Length));
+                    node.Text = node.Text.Substring(0, token.Text.Length);
+                    node.ParentNode.InsertAfter(suffixNode, node);
+                }
+
+                Debug.Assert(node.Text == token.Text);
+
+                // Tag the node so we can highlight it later
+                var span = parsed.CreateElement("span");
+                node.ParentNode.ReplaceChild(span, node);
+                span.AppendChild(node);
+                span.AddClass("token");
+                span.SetAttributeValue("data-token-index", tokenIndex.ToString());
+            }
+
+            return parsed.DocumentNode.InnerHtml;
+        }
+
+        private HtmlTextNode FindNextTextNode(HtmlNode node)
+        {
+            while (node != null)
+            {
+                if (node.FirstChild != null)
+                {
+                    node = node.FirstChild;
+                }
+                else if (node.NextSibling != null)
+                {
+                    node = node.NextSibling;
+                }
+                else
+                {
+                    while (node != null)
+                    {
+                        node = node.ParentNode;
+
+                        if (node.NextSibling != null)
+                        {
+                            node = node.NextSibling;
+                            break;
+                        }
+                    }
+                }
+
+                if (node is HtmlTextNode text)
+                    return text;
+            }
+
+            return null;
         }
 
         private void TreeView_MouseEnter(object sender, MouseEventArgs e)
@@ -142,7 +216,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
 
         private async void HighlightFragment(object sender, MouseEventArgs e)
         {
-            _ =HighlightFragment(e.Source as TreeViewItem);
+            _ = HighlightFragment(e.Source as TreeViewItem);
         }
 
         private async Task HighlightFragment(TreeViewItem? item)
@@ -159,18 +233,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             {
                 var fragment = (TSqlFragment)item.Tag;
 
-                if (_currentHighlight == fragment ||
-                    _currentHighlight?.StartOffset == fragment.StartOffset && _currentHighlight?.FragmentLength == fragment.FragmentLength)
-                    return;
-
-                if (_currentHighlightKey != null)
-                    await webView.CoreWebView2.ExecuteScriptAsync($"removeHighlight('{_currentHighlightKey}')");
-
-                var json = await webView.CoreWebView2.ExecuteScriptAsync($"highlightFragment({fragment.StartOffset - CountPrefixCr(fragment)}, {fragment.FragmentLength - CountCr(fragment)})");
-                var id = JValue.Parse(json).Value<string>();
-
-                _currentHighlight = fragment;
-                _currentHighlightKey = id;
+                await webView.CoreWebView2.ExecuteScriptAsync($"highlightFragment({fragment.FirstTokenIndex}, {fragment.LastTokenIndex})");
             }
             finally
             {
@@ -183,53 +246,13 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             _ = HighlightFragment(e.NewValue as TreeViewItem);
         }
 
-        private int CountPrefixCr(TSqlFragment fragment)
-        {
-            var cr = 0;
-
-            for (var i = 0; i < fragment.FirstTokenIndex; i++)
-            {
-                var token = fragment.ScriptTokenStream[i];
-
-                for (var j = 0; j < token.Text.Length; j++)
-                {
-                    if (token.Text[j] == '\r')
-                        cr++;
-                }
-            }
-
-            return cr;
-        }
-
-        private int CountCr(TSqlFragment fragment)
-        {
-            var cr = 0;
-
-            for (var i = fragment.FirstTokenIndex; i <= fragment.LastTokenIndex; i++)
-            {
-                var token = fragment.ScriptTokenStream[i];
-
-                for (var j = 0; j < token.Text.Length; j++)
-                {
-                    if (token.Text[j] == '\r')
-                        cr++;
-                }
-            }
-
-            return cr;
-        }
-
         private async void UnHighlightFragment(object sender, MouseEventArgs e)
         {
             await _highlightLock.WaitAsync();
 
             try
             {
-                if (_currentHighlightKey != null)
-                    await webView.CoreWebView2.ExecuteScriptAsync($"removeHighlight('{_currentHighlightKey}')");
-
-                _currentHighlight = null;
-                _currentHighlightKey = null;
+                await webView.CoreWebView2.ExecuteScriptAsync($"highlightFragment()");
             }
             finally
             {
