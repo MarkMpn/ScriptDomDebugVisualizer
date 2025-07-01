@@ -1,0 +1,110 @@
+﻿<!DOCTYPE html>
+
+<html lang="en" xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8" />
+    <title></title>
+    <style type="text/css">
+        .highlight {
+            background-color: yellow;
+        }
+    </style>
+    <script type="text/javascript">
+        const ranges = {};
+
+        const highlightFragment = function (startOffset, length) {
+            const endOffset = startOffset + length - 1;
+            const rangeKey = `x${startOffset}-${endOffset}`;
+
+            if (ranges[rangeKey] === undefined) {
+                // We haven't tagged this range yet, work out the affected elements now
+                const pre = document.querySelector("pre");
+                tagElements(pre, 0, startOffset, endOffset, rangeKey);
+                ranges[rangeKey] = rangeKey;
+            }
+
+            // Highlight all the tagged elements
+            const elements = document.querySelectorAll(`.${rangeKey}`);
+            elements.forEach(element => {
+                element.classList.add("highlight");
+            });
+
+            return rangeKey;
+        }
+
+        const tagElements = function (root, textOffset, startOffset, endOffset, rangeKey) {
+            for (const childNode of root.childNodes) {
+                if (childNode.nodeType === Node.TEXT_NODE) {
+                    if (textOffset >= startOffset && textOffset + childNode.length - 1 <= endOffset) {
+                        // The whole of this text is within the range - enclose it in a <span>
+                        tagElement(childNode, rangeKey);
+                    } else if (textOffset > endOffset) {
+                        // We've gone past the end of the range, so stop processing
+                        break;
+                    } else if (textOffset + childNode.length - 1 < startOffset) {
+                        // The whole of this text is before the range, so skip it
+                        textOffset += childNode.length;
+                        continue;
+                    } else {
+                        // This text overlaps the range, so we need to split it
+                        // Check if there's a prefix we need to split out
+                        if (textOffset < startOffset) {
+                            const prefixLength = startOffset - textOffset;
+                            const prefixText = childNode.textContent.substring(0, prefixLength);
+                            const prefixNode = document.createTextNode(prefixText);
+                            root.insertBefore(prefixNode, childNode);
+
+                            childNode.data = childNode.data.substring(prefixLength);
+                            textOffset += prefixLength;
+
+                            // The loop will pick up the current childNode again on the next iteration
+                            continue;
+                        }
+
+                        // Check if there's a suffix we need to split out
+                        if (textOffset + childNode.length - 1 > endOffset) {
+                            const suffixLength = (textOffset + childNode.length - 1) - endOffset;
+                            const suffixText = childNode.textContent.substring(childNode.length - suffixLength);
+                            const suffixNode = document.createTextNode(suffixText);
+                            root.insertBefore(suffixNode, childNode.nextSibling);
+
+                            childNode.data = childNode.data.substring(0, childNode.length - suffixLength);
+                        }
+
+                        // Now we can tag the remaining part of the text node
+                        tagElement(childNode, rangeKey);
+                    }
+
+                    textOffset += childNode.length;
+                } else {
+                    textOffset = tagElements(childNode, textOffset, startOffset, endOffset, rangeKey);
+                }
+            }
+
+            return textOffset;
+        }
+
+        const tagElement = function (node, rangeKey) {
+            const span = document.createElement("span");
+            span.classList.add(rangeKey);
+            node.parentElement.replaceChild(span, node);
+            span.appendChild(node);
+        }
+
+        const removeHighlight = function (rangeKey) {
+            // Un-highlight all the tagged elements
+            const elements = document.querySelectorAll(`.${rangeKey}`);
+            elements.forEach(element => {
+                element.classList.remove("highlight");
+            });
+        }
+
+        document.addEventListener("selectionchange", () => {
+
+        });
+    </script>
+</head>
+<body>
+    {{body}}
+</body>
+</html>
