@@ -13,7 +13,15 @@
             <wv2:WebView2 Name="webView" NavigationCompleted="WebViewNavigationCompleted">
             </wv2:WebView2>
             <GridSplitter Grid.Row="1" Height="5" HorizontalAlignment="Stretch" />
-            <TreeView Name="treeView" Grid.Row="2" />
+            <TreeView Name="treeView" Grid.Row="2">
+                <TreeView.Resources>
+                    <!-- Style the inactive selection the same as active -->
+                    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightBrushKey}"
+                     Color="{DynamicResource {x:Static SystemColors.HighlightColorKey}}" />
+                    <SolidColorBrush x:Key="{x:Static SystemColors.InactiveSelectionHighlightTextBrushKey}"
+                     Color="{DynamicResource {x:Static SystemColors.HighlightTextColorKey}}"/>
+                </TreeView.Resources>
+            </TreeView>
         </Grid>
     </DockPanel>
 </UserControl>

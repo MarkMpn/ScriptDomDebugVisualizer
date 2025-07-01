@@ -7,6 +7,7 @@ using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Drawing;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -144,7 +145,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             return parsed.DocumentNode.InnerHtml;
         }
 
-        private HtmlTextNode FindNextTextNode(HtmlNode node)
+        private HtmlTextNode? FindNextTextNode(HtmlNode node)
         {
             while (node != null)
             {
@@ -248,6 +249,9 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
 
         private async void UnHighlightFragment(object sender, MouseEventArgs e)
         {
+            if (treeView.SelectedItem != null)
+                return;
+
             await _highlightLock.WaitAsync();
 
             try
@@ -260,8 +264,42 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             }
         }
 
+        public void HighlightToken(int tokenIndex)
+        {
+            // Called from JavaScript to highlight the token in the treeview that the user hovered over in the script view
+            FindFragment((TreeViewItem)treeView.Items[0], tokenIndex);
+        }
+
+        private bool FindFragment(TreeViewItem item, int tokenIndex)
+        {
+            if (!(item.Tag is TSqlFragment fragment))
+                return false;
+
+            if (fragment.FirstTokenIndex > tokenIndex || fragment.LastTokenIndex < tokenIndex)
+            {
+                // This fragment doesn't contain the token we're looking for
+                return false;
+            }
+
+            // Check if there's a more specific child that also contains this token
+            foreach (TreeViewItem child in item.Items)
+            {
+                if (FindFragment(child, tokenIndex))
+                {
+                    // Found a child that contains the token, so select it
+                    return true;
+                }
+            }
+
+            // This is the most specific fragment, so select it
+            item.IsSelected = true;
+            item.BringIntoView();
+            return true;
+        }
+
         private async Task<TSqlFragment> GetFragmentAsync()
         {
+#if DEBUG
             if (_visualizerTarget == null)
             {
                 var query = @"
@@ -277,6 +315,7 @@ GROUP BY name";
                 using var reader = new StringReader(query);
                 return ((TSqlScript)parser.Parse(reader, out _)).Batches.Single().Statements.Single();
             }
+#endif
 
             var serializedFragment = await _visualizerTarget.ObjectSource.RequestDataAsync<SerializedFragment>(null, CancellationToken.None);
             var settings = new JsonSerializerSettings
@@ -304,8 +343,25 @@ GROUP BY name";
 
         private void WebViewNavigationCompleted(object sender, CoreWebView2NavigationCompletedEventArgs e)
         {
-            //webView.CoreWebView2.AddHostObjectToScript("host", this);
+            webView.CoreWebView2.AddHostObjectToScript("host", new HostObject(this));
             _ = webView.CoreWebView2.ExecuteScriptAsync($"document.querySelector(':root').style.setProperty('--bg-color', 'RGB({_backgroundColor.R}, {_backgroundColor.G}, {_backgroundColor.B})');");
+        }
+
+        [ComVisible(true)]
+        [ClassInterface(ClassInterfaceType.AutoDual)]
+        public class HostObject
+        {
+            private readonly ScriptDomUserControl _control;
+
+            public HostObject(ScriptDomUserControl control)
+            {
+                _control = control ?? throw new ArgumentNullException(nameof(control));
+            }
+
+            public void HighlightToken(int tokenIndex)
+            {
+                _control.HighlightToken(tokenIndex);
+            }
         }
     }
 }

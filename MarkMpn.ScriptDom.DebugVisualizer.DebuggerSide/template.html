@@ -7,9 +7,20 @@
     <style type="text/css">
         .highlight {
             background-color: yellow;
+            color: black;
+        }
+
+        .token {
+            cursor: default;
         }
     </style>
+</head>
+<body>
+    {{body}}
+
     <script type="text/javascript">
+
+        let clicked = false;
 
         const highlightFragment = function (firstTokenIndex, lastTokenIndex) {
 
@@ -28,9 +39,31 @@
                 }
             }
         }
+
+        document.body.addEventListener("mouseover", event => {
+            if (clicked)
+                return;
+
+            const tokenIndex = event.target.getAttribute("data-token-index");
+
+            if (tokenIndex)
+                chrome.webview.hostObjects.host.HighlightToken(tokenIndex);
+            else
+                chrome.webview.hostObjects.host.HighlightToken(-1);
+        });
+
+        document.body.addEventListener("click", event => {
+            const tokenIndex = event.target.getAttribute("data-token-index");
+
+            if (tokenIndex) {
+                clicked = true;
+            } else {
+                clicked = false;
+                highlightFragment(-1, -1);
+                chrome.webview.hostObjects.host.HighlightToken(-1);
+            }
+        });
+
     </script>
-</head>
-<body>
-    {{body}}
 </body>
 </html>
