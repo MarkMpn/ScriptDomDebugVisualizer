@@ -9,6 +9,7 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="5" />
                 <RowDefinition Height="*" />
+                <RowDefinition Height="20" />
             </Grid.RowDefinitions>
             <wv2:WebView2 Name="webView" NavigationCompleted="WebViewNavigationCompleted">
             </wv2:WebView2>
@@ -22,6 +23,8 @@
                      Color="{DynamicResource {x:Static SystemColors.HighlightTextColorKey}}"/>
                 </TreeView.Resources>
             </TreeView>
+            <StatusBar Name="statusBar" Grid.Row="3">
+            </StatusBar>
         </Grid>
     </DockPanel>
 </UserControl>

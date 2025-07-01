@@ -10,6 +10,7 @@ using System.Drawing;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using MessageBox = System.Windows.MessageBox;
 
@@ -91,6 +92,8 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                 treeView.MouseLeave += UnHighlightFragment;
                 treeView.MouseMove += HighlightFragment;
                 treeView.SelectedItemChanged += HighlightFragmentOnClick;
+
+                statusBar.MouseDown += HighlightFragmentOnStatusBarClick;
             }
             catch (Exception ex)
             {
@@ -102,6 +105,15 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                 {
                     webView.CoreWebView2.Navigate(_filePath);
                 }
+            }
+        }
+
+        private void HighlightFragmentOnStatusBarClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.Source is StatusBarItem item && item.Tag is TreeViewItem treeViewItem)
+            {
+                treeViewItem.IsSelected = true;
+                treeViewItem.BringIntoView();
             }
         }
 
@@ -228,11 +240,14 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             if (treeView.SelectedItem != null && treeView.SelectedItem != item)
                 return;
 
+            var fragment = (TSqlFragment)item.Tag;
+
             await _highlightLock.WaitAsync();
 
             try
             {
-                var fragment = (TSqlFragment)item.Tag;
+                statusBar.Items.Clear();
+                AddStatusBarItems(item);
 
                 await webView.CoreWebView2.ExecuteScriptAsync($"highlightFragment({fragment.FirstTokenIndex}, {fragment.LastTokenIndex})");
             }
@@ -240,6 +255,34 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             {
                 _highlightLock.Release();
             }
+        }
+
+        private void AddStatusBarItems(TreeViewItem item)
+        {
+            var text = (string)item.Header;
+
+            if (text.EndsWith(" - " + item.Tag.GetType().Name))
+                text = text.Substring(0, text.Length - 3 - item.Tag.GetType().Name.Length);
+
+            if (statusBar.Items.Count > 0)
+            {
+                var separator = new StatusBarItem
+                {
+                    Content = ">"
+                };
+                statusBar.Items.Insert(0, separator);
+            }
+
+            var statusBarItem = new StatusBarItem
+            {
+                Content = text,
+                Tag = item,
+            };
+
+            statusBar.Items.Insert(0, statusBarItem);
+
+            if (item.Parent is TreeViewItem parentItem)
+                AddStatusBarItems(parentItem);
         }
 
         private void HighlightFragmentOnClick(object sender, RoutedPropertyChangedEventArgs<object> e)
@@ -257,6 +300,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             try
             {
                 await webView.CoreWebView2.ExecuteScriptAsync($"highlightFragment()");
+                statusBar.Items.Clear();
             }
             finally
             {
