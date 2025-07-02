@@ -1,18 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
 using System.Windows;
-using System.Windows.Controls;
-using System.Windows.Data;
-using System.Windows.Documents;
-using System.Windows.Input;
-using System.Windows.Media;
-using System.Windows.Media.Imaging;
-using System.Windows.Navigation;
-using System.Windows.Shapes;
 using MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 
 namespace TestApp
 {
@@ -25,7 +16,25 @@ namespace TestApp
         {
             InitializeComponent();
 
-            AddChild(new ScriptDomUserControl(null));
+            AddChild(new ScriptDomUserControl(() => GetTestFragmentAsync()));
+        }
+
+        private Task<TSqlFragment> GetTestFragmentAsync()
+        {
+            var query = @"
+SELECT name
+FROM (
+    SELECT TOP 10 *
+    FROM account
+) AS SubQuery
+GROUP BY name";
+
+
+            var parser = new TSql160Parser(false);
+            using (var reader = new StringReader(query))
+            {
+                return Task.FromResult((TSqlFragment)((TSqlScript)parser.Parse(reader, out _)).Batches.Single().Statements.Single());
+            }
         }
     }
 }

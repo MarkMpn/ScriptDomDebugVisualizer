@@ -2,7 +2,6 @@
 using ColorCode.Styling;
 using HtmlAgilityPack;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
-using Microsoft.VisualStudio.Extensibility.DebuggerVisualizers;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
 using System.Diagnostics;
@@ -20,14 +19,14 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
     public partial class ScriptDomUserControl : System.Windows.Controls.UserControl
     {
         private string? _filePath;
-        private readonly VisualizerTarget _visualizerTarget;
+        private readonly Func<Task<TSqlFragment>> _fragmentSource;
         private readonly Color _backgroundColor = Color.Black;// VSColorTheme.GetThemedColor(ThemedDialogColors.WindowPanelBrushKey);
         private readonly SemaphoreSlim _highlightLock = new SemaphoreSlim(1, 1);
         private static readonly string AssemblyLocation = Path.GetDirectoryName(typeof(ScriptDomUserControl).Assembly.Location);
 
-        public ScriptDomUserControl(VisualizerTarget visualizerTarget)
+        public ScriptDomUserControl(Func<Task<TSqlFragment>> fragmentSource)
         {
-            this._visualizerTarget = visualizerTarget;
+            _fragmentSource = fragmentSource;
             InitializeComponent();
 
             Unloaded += ScriptDomUserControlUnloaded;
@@ -58,16 +57,23 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                 webView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
 #endif
-                var fragment = await GetFragmentAsync();
+                var fragment = await _fragmentSource();
                 new Sql160ScriptGenerator().GenerateScript(fragment, out var sql);
 
-                if (fragment is TSqlStatement)
+                if (fragment is TSqlScript || fragment is TSqlBatch || fragment is TSqlStatement)
                 {
                     // Re-parse the statement to a new fragment so we can correlate each part of the DOM with the
                     // corresponding tokens
                     var parser = new TSql160Parser(false);
                     using var reader = new StringReader(sql);
-                    fragment = ((TSqlScript)parser.Parse(reader, out _)).Batches.Single().Statements.Single();
+                    var parsedScript = (TSqlScript)parser.Parse(reader, out _);
+
+                    if (fragment is TSqlScript)
+                        fragment = parsedScript;
+                    else if (fragment is TSqlBatch)
+                        fragment = parsedScript.Batches.Single();
+                    else
+                        fragment = parsedScript.Batches.Single().Statements.Single();
                 }
 
                 // Generate the HTML for the script
@@ -339,34 +345,6 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             item.IsSelected = true;
             item.BringIntoView();
             return true;
-        }
-
-        private async Task<TSqlFragment> GetFragmentAsync()
-        {
-#if DEBUG
-            if (_visualizerTarget == null)
-            {
-                var query = @"
-SELECT name
-FROM (
-    SELECT TOP 10 *
-    FROM account
-) AS SubQuery
-GROUP BY name";
-
-
-                var parser = new TSql160Parser(false);
-                using var reader = new StringReader(query);
-                return ((TSqlScript)parser.Parse(reader, out _)).Batches.Single().Statements.Single();
-            }
-#endif
-
-            var serializedFragment = await _visualizerTarget.ObjectSource.RequestDataAsync<SerializedFragment>(null, CancellationToken.None);
-            var settings = new JsonSerializerSettings
-            {
-                TypeNameHandling = TypeNameHandling.Auto
-            };
-            return JsonConvert.DeserializeObject<TSqlFragment>(serializedFragment.Fragment, settings);
         }
 
         private static void SafeDeleteFile(string? path)
