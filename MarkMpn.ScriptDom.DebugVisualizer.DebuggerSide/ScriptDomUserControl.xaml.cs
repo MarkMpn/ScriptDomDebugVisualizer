@@ -3,7 +3,6 @@ using ColorCode.Styling;
 using HtmlAgilityPack;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Microsoft.Web.WebView2.Core;
-using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -19,6 +18,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
     public partial class ScriptDomUserControl : System.Windows.Controls.UserControl
     {
         private string? _filePath;
+        private bool _clicked;
         private readonly Func<Task<TSqlFragment>> _fragmentSource;
         private readonly Color _backgroundColor = Color.Black;// VSColorTheme.GetThemedColor(ThemedDialogColors.WindowPanelBrushKey);
         private readonly SemaphoreSlim _highlightLock = new SemaphoreSlim(1, 1);
@@ -96,8 +96,9 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                 treeView.Items.Clear();
                 treeView.Items.Add(CreateTreeViewItem(fragment, null));
                 treeView.MouseLeave += UnHighlightFragment;
-                treeView.MouseMove += HighlightFragment;
+                treeView.MouseMove += HighlightFragmentOnTreeViewMouseMove;
                 treeView.SelectedItemChanged += HighlightFragmentOnClick;
+                treeView.PreviewMouseDown += HighlightFragmentOnTreeViewClick;
 
                 statusBar.MouseDown += HighlightFragmentOnStatusBarClick;
             }
@@ -111,6 +112,20 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                 {
                     webView.CoreWebView2.Navigate(_filePath);
                 }
+            }
+        }
+
+        private void HighlightFragmentOnTreeViewClick(object sender, MouseButtonEventArgs e)
+        {
+            if (e.Source is TreeViewItem item)
+            {
+                _ = HighlightFragment(item);
+                _clicked = true;
+            }
+            else
+            {
+                UnHighlightFragment(sender, e);
+                _clicked = false;
             }
         }
 
@@ -233,17 +248,18 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
             return item;
         }
 
-        private async void HighlightFragment(object sender, MouseEventArgs e)
+        private async void HighlightFragmentOnTreeViewMouseMove(object sender, MouseEventArgs e)
         {
-            _ = HighlightFragment(e.Source as TreeViewItem);
+            if (_clicked)
+                return;
+
+            if (e.Source is TreeViewItem item)
+                item.IsSelected = true;
         }
 
         private async Task HighlightFragment(TreeViewItem? item)
         {
             if (item == null)
-                return;
-
-            if (treeView.SelectedItem != null && treeView.SelectedItem != item)
                 return;
 
             var fragment = (TSqlFragment)item.Tag;
