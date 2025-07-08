@@ -8,6 +8,8 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebugeeSide
 {
     public class SerializedFragment
     {
+        public string Sql { get; set; }
+
         public string Fragment { get; set; }
     }
 }

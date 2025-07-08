@@ -1,7 +1,9 @@
-﻿using Microsoft.SqlServer.TransactSql.ScriptDom;
+﻿using MarkMpn.ScriptDom.DebugVisualizer.UI;
+using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Microsoft.VisualStudio.Extensibility;
 using Microsoft.VisualStudio.Extensibility.DebuggerVisualizers;
 using Microsoft.VisualStudio.Extensibility.VSSdkCompatibility;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.VisualStudio.RpcContracts.RemoteUI;
 using Microsoft.VisualStudio.Shell;
 using Newtonsoft.Json;
@@ -349,18 +351,13 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
         public override async Task<IRemoteUserControl> CreateVisualizerAsync(VisualizerTarget visualizerTarget, CancellationToken cancellationToken)
         {
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync(cancellationToken);
-            var wrapper = new WpfControlWrapper(new ScriptDomUserControl(() => GetTargetFragmentAsync(visualizerTarget, cancellationToken)));
+            var wrapper = new WpfControlWrapper(new ScriptDomUserControl(() => GetTargetFragmentAsync(visualizerTarget, cancellationToken), VSColorTheme.GetThemedColor(ThemedDialogColors.WindowPanelBrushKey)));
             return wrapper;
         }
 
-        private async Task<TSqlFragment> GetTargetFragmentAsync(VisualizerTarget visualizerTarget, CancellationToken cancellationToken)
+        private async Task<SerializedFragment> GetTargetFragmentAsync(VisualizerTarget visualizerTarget, CancellationToken cancellationToken)
         {
-            var serializedFragment = await visualizerTarget.ObjectSource.RequestDataAsync<SerializedFragment>(null, cancellationToken);
-            var settings = new JsonSerializerSettings
-            {
-                TypeNameHandling = TypeNameHandling.Auto
-            };
-            return JsonConvert.DeserializeObject<TSqlFragment>(serializedFragment.Fragment, settings);
+            return await visualizerTarget.ObjectSource.RequestDataAsync<SerializedFragment>(null, cancellationToken);
         }
     }
 }

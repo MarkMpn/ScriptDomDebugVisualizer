@@ -1,46 +1,44 @@
-﻿<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
   <PropertyGroup>
-    <TargetFramework>net48</TargetFramework>
+    <TargetFramework>net472</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <LangVersion>latest</LangVersion>
-    <OutputType>WinExe</OutputType>
   </PropertyGroup>
-  
   <ItemGroup>
-    <ApplicationDefinition Include="App.xaml">
-      <Generator>MSBuild:Compile</Generator>
-    </ApplicationDefinition>
+    <None Remove="ScriptDomUserControl.xaml" />
+    <None Remove="template.html" />
   </ItemGroup>
   
   <ItemGroup>
-    <Page Include="MainWindow.xaml">
+    <EmbeddedResource Include="template.html" />
+  </ItemGroup>
+  
+  <ItemGroup>
+    <Page Include="ScriptDomUserControl.xaml">
       <Generator>MSBuild:Compile</Generator>
     </Page>
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="ColorCode.HTML" Version="2.0.15" />
-    <PackageReference Include="HtmlAgilityPack" Version="1.12.1" />
-    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.14.40265">
+    <PackageReference Include="Microsoft.VisualStudio.SDK" Version="17.10.40171">
       <ExcludeAssets>runtime</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.VisualStudio.Shell.15.0" Version="17.14.40264" />
   </ItemGroup>
 
   <ItemGroup>
     <Reference Include="PresentationCore" />
     <Reference Include="PresentationFramework" />
+    <Reference Include="System.Web" />
     <Reference Include="System.Xaml" />
     <Reference Include="WindowsBase" />
     <Reference Include="WindowsFormsIntegration" />
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="ColorCode.HTML" Version="2.0.15" />
+    <PackageReference Include="HtmlAgilityPack" Version="1.12.1" />
     <PackageReference Include="Microsoft.SqlServer.TransactSql.ScriptDom" Version="170.64.0" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <ProjectReference Include="..\MarkMpn.ScriptDom.DebugVisualizer.UI\MarkMpn.ScriptDom.DebugVisualizer.UI.csproj" />
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.3351.48" />
   </ItemGroup>
 </Project>

@@ -24,11 +24,19 @@
 
         const highlightFragment = function (firstTokenIndex, lastTokenIndex) {
 
+            let foundFirst = false;
+
             for (let i = 0; ; i++) {
                 const span = document.querySelector(`.token[data-token-index='${i}']`);
 
-                if (!span)
-                    break;
+                if (!span) {
+                    if (foundFirst)
+                        break;
+                    else
+                        continue;
+                }
+
+                foundFirst = true;
 
                 if (i >= firstTokenIndex && i <= lastTokenIndex) {
                     // This token is within the range, so highlight it
@@ -57,6 +65,7 @@
 
             if (tokenIndex) {
                 clicked = true;
+                chrome.webview.hostObjects.host.HighlightToken(tokenIndex);
             } else {
                 clicked = false;
                 highlightFragment(-1, -1);

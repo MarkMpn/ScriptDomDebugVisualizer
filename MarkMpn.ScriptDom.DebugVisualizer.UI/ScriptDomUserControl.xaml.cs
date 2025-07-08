@@ -2,31 +2,36 @@
 using ColorCode.Styling;
 using HtmlAgilityPack;
 using Microsoft.SqlServer.TransactSql.ScriptDom;
+using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.Web.WebView2.Core;
+using Newtonsoft.Json;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
+using System.Text.Encodings.Web;
+using System.Web;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using MessageBox = System.Windows.MessageBox;
 
-namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
+namespace MarkMpn.ScriptDom.DebugVisualizer.UI
 {
     // https://github.com/Giorgi/EFCore.Visualizer/blob/main/src/EFCore.Visualizer/QueryPlanUserControl.xaml.cs
     public partial class ScriptDomUserControl : System.Windows.Controls.UserControl
     {
         private string? _filePath;
         private bool _clicked;
-        private readonly Func<Task<TSqlFragment>> _fragmentSource;
-        private readonly Color _backgroundColor = Color.Black;// VSColorTheme.GetThemedColor(ThemedDialogColors.WindowPanelBrushKey);
+        private readonly Func<Task<SerializedFragment>> _fragmentSource;
+        private readonly Color _backgroundColor;
         private readonly SemaphoreSlim _highlightLock = new SemaphoreSlim(1, 1);
         private static readonly string AssemblyLocation = Path.GetDirectoryName(typeof(ScriptDomUserControl).Assembly.Location);
 
-        public ScriptDomUserControl(Func<Task<TSqlFragment>> fragmentSource)
+        public ScriptDomUserControl(Func<Task<SerializedFragment>> fragmentSource, Color backgroundColor)
         {
             _fragmentSource = fragmentSource;
+            _backgroundColor = backgroundColor;
             InitializeComponent();
 
             Unloaded += ScriptDomUserControlUnloaded;
@@ -57,8 +62,19 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                 webView.CoreWebView2.Settings.AreBrowserAcceleratorKeysEnabled = false;
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
 #endif
-                var fragment = await _fragmentSource();
-                new Sql160ScriptGenerator().GenerateScript(fragment, out var sql);
+                var serializedFragment = await _fragmentSource();
+
+                var settings = new JsonSerializerSettings
+                {
+                    TypeNameHandling = TypeNameHandling.Auto,
+                    SerializationBinder = new ScriptDomBinder()
+                };
+                var fragment = JsonConvert.DeserializeObject<TSqlFragment>(serializedFragment.Fragment, settings);
+
+                var sql = serializedFragment.Sql;
+
+                if (string.IsNullOrEmpty(sql))
+                    new Sql160ScriptGenerator().GenerateScript(fragment, out sql);
 
                 if (fragment is TSqlScript || fragment is TSqlBatch || fragment is TSqlStatement)
                 {
@@ -85,7 +101,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
 
                 _filePath = Path.Combine(Path.GetTempPath(), Path.ChangeExtension(Path.GetRandomFileName(), "html"));
 
-                using var templateStream = GetType().Assembly.GetManifestResourceStream("MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide.template.html");
+                using var templateStream = GetType().Assembly.GetManifestResourceStream("MarkMpn.ScriptDom.DebugVisualizer.UI.template.html");
                 using var templateReader = new StreamReader(templateStream);
                 var template = templateReader.ReadToEnd();
 
@@ -148,7 +164,18 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
 
             var node = FindNextTextNode(parsed.DocumentNode);
 
-            for (var tokenIndex = 0; tokenIndex < fragment.ScriptTokenStream.Count; tokenIndex++)
+            var tokenIndex = 0;
+
+            // Skip any leading whitespace
+            while (tokenIndex < fragment.ScriptTokenStream.Count)
+            {
+                if (fragment.ScriptTokenStream[tokenIndex].TokenType == TSqlTokenType.WhiteSpace)
+                    tokenIndex++;
+                else
+                    break;
+            }
+
+            for (; tokenIndex < fragment.ScriptTokenStream.Count; tokenIndex++)
             {
                 var token = fragment.ScriptTokenStream[tokenIndex];
 
@@ -156,16 +183,17 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
                     break;
 
                 node = FindNextTextNode(node);
+                var text = HttpUtility.HtmlDecode(node.Text);
 
-                if (node.Text.Length > token.Text.Length)
+                if (text.Length > token.Text.Length)
                 {
                     // Split this node into two parts
-                    var suffixNode = parsed.CreateTextNode(node.Text.Substring(token.Text.Length));
-                    node.Text = node.Text.Substring(0, token.Text.Length);
+                    var suffixNode = parsed.CreateTextNode(HttpUtility.HtmlEncode(text.Substring(token.Text.Length)));
+                    node.Text = HttpUtility.HtmlEncode(text.Substring(0, token.Text.Length));
                     node.ParentNode.InsertAfter(suffixNode, node);
                 }
 
-                Debug.Assert(node.Text == token.Text);
+                Debug.Assert(HttpUtility.HtmlDecode(node.Text) == token.Text);
 
                 // Tag the node so we can highlight it later
                 var span = parsed.CreateElement("span");

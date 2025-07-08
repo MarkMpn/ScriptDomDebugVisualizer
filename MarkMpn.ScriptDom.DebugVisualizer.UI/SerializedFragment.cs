@@ -4,10 +4,12 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 
-namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
+namespace MarkMpn.ScriptDom.DebugVisualizer.UI
 {
     public class SerializedFragment
     {
+        public string Sql { get; set; }
+
         public string Fragment { get; set; }
     }
 }
