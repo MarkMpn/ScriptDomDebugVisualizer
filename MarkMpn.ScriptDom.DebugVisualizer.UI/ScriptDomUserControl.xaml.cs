@@ -26,12 +26,14 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
         private readonly Func<Task<SerializedFragment>> _fragmentSource;
         private readonly Color _backgroundColor;
         private readonly SemaphoreSlim _highlightLock = new SemaphoreSlim(1, 1);
+        private readonly System.Windows.Forms.PropertyGrid _propertyGrid;
         private static readonly string AssemblyLocation = Path.GetDirectoryName(typeof(ScriptDomUserControl).Assembly.Location);
 
         public ScriptDomUserControl(Func<Task<SerializedFragment>> fragmentSource, Color backgroundColor)
         {
             _fragmentSource = fragmentSource;
             _backgroundColor = backgroundColor;
+            _propertyGrid = new System.Windows.Forms.PropertyGrid();
             InitializeComponent();
 
             Unloaded += ScriptDomUserControlUnloaded;
@@ -53,6 +55,8 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
             try
             {
                 base.OnInitialized(e);
+
+                propertyGridHost.Child = _propertyGrid;
 
                 var environment = await CoreWebView2Environment.CreateAsync(userDataFolder: Path.Combine(AssemblyLocation, "WVData"));
                 await webView.EnsureCoreWebView2Async(environment);
@@ -309,6 +313,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
                 return;
 
             var fragment = (TSqlFragment)item.Tag;
+            _propertyGrid.SelectedObject = fragment;
 
             await _highlightLock.WaitAsync();
 
