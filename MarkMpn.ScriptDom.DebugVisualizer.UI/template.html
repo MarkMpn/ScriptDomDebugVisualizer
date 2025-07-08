@@ -36,17 +36,21 @@
                         continue;
                 }
 
-                foundFirst = true;
-
                 if (i >= firstTokenIndex && i <= lastTokenIndex) {
                     // This token is within the range, so highlight it
-                    for (const s of span)
+                    for (const s of span) {
+                        if (!foundFirst)
+                            s.scrollIntoView();
+
                         s.classList.add("highlight");
+                    }
                 } else {
                     // This token is outside the range, so remove any highlight
                     for (const s of span)
                         s.classList.remove("highlight");
                 }
+
+                foundFirst = true;
             }
         }
 
