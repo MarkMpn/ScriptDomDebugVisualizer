@@ -175,6 +175,8 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
                     break;
             }
 
+            var taggedLength = 0;
+
             for (; tokenIndex < fragment.ScriptTokenStream.Count; tokenIndex++)
             {
                 var token = fragment.ScriptTokenStream[tokenIndex];
@@ -192,8 +194,16 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
                     node.Text = HttpUtility.HtmlEncode(text.Substring(0, token.Text.Length));
                     node.ParentNode.InsertAfter(suffixNode, node);
                 }
+                else if (text.Length < token.Text.Length)
+                {
+                    // This token spans multiple text nodes. Tag this one and continue to the next
+                    taggedLength += text.Length;
+                }
 
-                Debug.Assert(HttpUtility.HtmlDecode(node.Text) == token.Text);
+                if (taggedLength == 0)
+                    Debug.Assert(HttpUtility.HtmlDecode(node.Text) == token.Text);
+                else
+                    Debug.Assert(HttpUtility.HtmlDecode(node.Text) == token.Text.Substring(taggedLength - text.Length, text.Length));
 
                 // Tag the node so we can highlight it later
                 var span = parsed.CreateElement("span");
@@ -201,6 +211,14 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
                 span.AppendChild(node);
                 span.AddClass("token");
                 span.SetAttributeValue("data-token-index", tokenIndex.ToString());
+
+                if (taggedLength > 0)
+                {
+                    if (taggedLength == token.Text.Length)
+                        taggedLength = 0;
+                    else
+                        tokenIndex--;
+                }
             }
 
             return parsed.DocumentNode.InnerHtml;

@@ -25,7 +25,7 @@ namespace TestApp
         private Task<SerializedFragment> GetTestFragmentAsync()
         {
             var query = @"
-SELECT name
+SELECT name, N'Unicode test'
 FROM (
     SELECT TOP 10 *
     FROM account
