@@ -19,7 +19,7 @@ namespace TestApp
         {
             InitializeComponent();
 
-            AddChild(new ScriptDomUserControl(() => GetTestFragmentAsync(), Color.White));
+            AddChild(new ScriptDomUserControl(() => GetTestFragmentAsync(), Color.Black));
         }
 
         private Task<SerializedFragment> GetTestFragmentAsync()

@@ -5,6 +5,7 @@ using Microsoft.SqlServer.TransactSql.ScriptDom;
 using Microsoft.VisualStudio.PlatformUI;
 using Microsoft.Web.WebView2.Core;
 using Newtonsoft.Json;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Drawing;
 using System.Runtime.InteropServices;
@@ -19,7 +20,7 @@ using MessageBox = System.Windows.MessageBox;
 namespace MarkMpn.ScriptDom.DebugVisualizer.UI
 {
     // https://github.com/Giorgi/EFCore.Visualizer/blob/main/src/EFCore.Visualizer/QueryPlanUserControl.xaml.cs
-    public partial class ScriptDomUserControl : System.Windows.Controls.UserControl
+    public partial class ScriptDomUserControl : System.Windows.Controls.UserControl, ISite
     {
         private string? _filePath;
         private bool _clicked;
@@ -34,6 +35,8 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
             _fragmentSource = fragmentSource;
             _backgroundColor = backgroundColor;
             _propertyGrid = new System.Windows.Forms.PropertyGrid();
+            _propertyGrid.Site = this;
+
             InitializeComponent();
 
             Unloaded += ScriptDomUserControlUnloaded;
@@ -307,13 +310,36 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
                 item.IsSelected = true;
         }
 
+        public async Task SelectFragment(TSqlFragment fragment)
+        {
+            var treeViewItem = FindFragment((TreeViewItem)treeView.Items[0], fragment);
+
+            if (treeViewItem != null)
+                treeViewItem.IsSelected = true;
+        }
+
+        private TreeViewItem? FindFragment(TreeViewItem treeViewItem, TSqlFragment fragment)
+        {
+            if (treeViewItem.Tag == fragment)
+                return treeViewItem;
+
+            foreach (TreeViewItem child in treeViewItem.Items)
+            {
+                var foundItem = FindFragment(child, fragment);
+                if (foundItem != null)
+                    return foundItem;
+            }
+
+            return null;
+        }
+
         private async Task HighlightFragment(TreeViewItem? item)
         {
             if (item == null)
                 return;
 
             var fragment = (TSqlFragment)item.Tag;
-            _propertyGrid.SelectedObject = fragment;
+            _propertyGrid.SelectedObject = new ScriptDomTypeDescriptor(fragment);
 
             await _highlightLock.WaitAsync();
 
@@ -434,6 +460,22 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
         {
             webView.CoreWebView2.AddHostObjectToScript("host", new HostObject(this));
             _ = webView.CoreWebView2.ExecuteScriptAsync($"document.querySelector(':root').style.setProperty('--bg-color', 'RGB({_backgroundColor.R}, {_backgroundColor.G}, {_backgroundColor.B})');");
+        }
+
+        IComponent ISite.Component => null;
+
+        IContainer ISite.Container => null;
+
+        bool ISite.DesignMode => false;
+
+        string ISite.Name { get; set; }
+
+        object IServiceProvider.GetService(Type serviceType)
+        {
+            if (serviceType == GetType())
+                return this;
+
+            return null;
         }
 
         [ComVisible(true)]
