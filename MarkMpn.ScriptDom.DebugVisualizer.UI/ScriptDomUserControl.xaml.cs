@@ -70,34 +70,14 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
                 webView.CoreWebView2.Settings.AreDefaultContextMenusEnabled = false;
 #endif
                 var serializedFragment = await _fragmentSource();
-
-                var settings = new JsonSerializerSettings
-                {
-                    TypeNameHandling = TypeNameHandling.Auto,
-                    SerializationBinder = new ScriptDomBinder()
-                };
-                var fragment = JsonConvert.DeserializeObject<TSqlFragment>(serializedFragment.Fragment, settings);
-
                 var sql = serializedFragment.Sql;
+                var fragment = new TSql170Parser(false).Parse(new StringReader(sql), out _);
+                var fragmentType = typeof(TSqlFragment).Assembly.GetType(serializedFragment.FragmentType);
 
-                if (string.IsNullOrEmpty(sql))
-                    new Sql160ScriptGenerator().GenerateScript(fragment, out sql);
-
-                if (fragment is TSqlScript || fragment is TSqlBatch || fragment is TSqlStatement)
-                {
-                    // Re-parse the statement to a new fragment so we can correlate each part of the DOM with the
-                    // corresponding tokens
-                    var parser = new TSql160Parser(false);
-                    using var reader = new StringReader(sql);
-                    var parsedScript = (TSqlScript)parser.Parse(reader, out _);
-
-                    if (fragment is TSqlScript)
-                        fragment = parsedScript;
-                    else if (fragment is TSqlBatch)
-                        fragment = parsedScript.Batches.Single();
-                    else
-                        fragment = parsedScript.Batches.Single().Statements.Single();
-                }
+                if (fragmentType == typeof(TSqlBatch))
+                    fragment = ((TSqlScript)fragment).Batches.Single();
+                else if (typeof(TSqlStatement).IsAssignableFrom(fragmentType))
+                    fragment = ((TSqlScript)fragment).Batches.Single().Statements.Single();
 
                 // Generate the HTML for the script
                 var formatter = new HtmlFormatter(IsBackgroundDarkColor(_backgroundColor) ? StyleDictionary.DefaultDark : StyleDictionary.DefaultLight);

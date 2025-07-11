@@ -19,6 +19,7 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.DebuggerSide
         private const string DisplayName = "MarkMpn.ScriptDom.DebugVisualizer.DisplayName";
 
         public override DebuggerVisualizerProviderConfiguration DebuggerVisualizerProviderConfiguration => new(
+            new VisualizerTargetType($"%{DisplayName}%", typeof(string)),
             new VisualizerTargetType($"%{DisplayName}%", typeof(TSqlScript)),
             new VisualizerTargetType($"%{DisplayName}%", typeof(TSqlBatch)),
             new VisualizerTargetType($"%{DisplayName}%", typeof(ExecuteStatement)),

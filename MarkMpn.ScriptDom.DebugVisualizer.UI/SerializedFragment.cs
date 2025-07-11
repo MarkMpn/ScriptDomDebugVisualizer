@@ -10,6 +10,6 @@ namespace MarkMpn.ScriptDom.DebugVisualizer.UI
     {
         public string Sql { get; set; }
 
-        public string Fragment { get; set; }
+        public string FragmentType { get; set; }
     }
 }
